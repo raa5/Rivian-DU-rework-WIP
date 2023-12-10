@@ -1,0 +1,1984 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RIVIAN</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        background-color: #f5f5f5;
+      }
+
+      header {
+        background-color: #333;
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-size: 24px;
+      }
+
+      nav {
+        width: 200px;
+        background-color: #333;
+        color: white;
+        position: fixed;
+        height: 100%;
+        overflow: auto;
+      }
+
+      ul {
+        list-style: none;
+        padding: 0;
+      }
+
+      li {
+        margin-bottom: 10px;
+      }
+
+      a {
+        text-decoration: none;
+        color: white;
+        font-size: 18px;
+      }
+
+      main {
+        margin-left: 200px;
+        padding: 20px;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+
+      input {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      #result {
+        margin-top: 20px;
+        font-weight: bold;
+      }
+
+      #historyContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+      }
+
+      .historyItem {
+        cursor: pointer;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 5px;
+        text-align: center;
+        background-color: #fff;
+      }
+
+      .historyItem:hover {
+        background-color: #e0e0e0;
+      }
+
+      #chartContainer {
+        width: 100%;
+        max-width: 600px;
+        margin-top: 20px;
+      }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.js"></script>
+    <script src="https://cdn.rawgit.com/antimatter15/jsgif/master/dist/gif.js"></script>
+  </head>
+
+  <body>
+    <nav>
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#services">Services</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+
+    <main>
+      <header>RIVIAN</header>
+
+      <h2>Custom Daily Calculator</h2>
+
+      <label for="duaInput">DUA/DUT fallout:</label>
+      <input type="number" id="duaInput" placeholder="Enter value" />
+
+      <label for="eolInput">EOL fallout:</label>
+      <input type="number" id="eolInput" placeholder="Enter value" />
+
+      <label for="reworkedInput">Reworked:</label>
+      <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+      <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+      <input
+        type="number"
+        id="collegeWarehouseInput"
+        placeholder="Enter value"
+      />
+
+      <br />
+
+      <button onclick="calculateResult()">Calculate</button>
+
+      <br />
+
+      <label for="result">Result:</label>
+      <input type="text" id="result" readonly />
+
+      <div id="historyContainer">
+        <!-- History containers will be dynamically added here -->
+      </div>
+
+      <div id="chartContainer"></div>
+
+      <!-- Add buttons to trigger export functions -->
+      <button onclick="exportResults()">Export Results</button>
+      <button onclick="exportChart()">Export Chart</button>
+      <!-- Add a button to trigger the clearHistory function -->
+      <button onclick="clearHistory()">Clear History</button>
+    </main>
+
+    <script>
+      var resultHistory = loadHistory(); // Load history from localStorage on page load
+      var chart;
+
+      function calculateResult() {
+        var duaValue = parseInt(document.getElementById("duaInput").value) || 0;
+        var eolValue = parseInt(document.getElementById("eolInput").value) || 0;
+        var reworkedValue =
+          parseInt(document.getElementById("reworkedInput").value) || 0;
+        var collegeWarehouseValue =
+          parseInt(document.getElementById("collegeWarehouseInput").value) || 0;
+
+        var dailyResult =
+          duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+        // Add the previous day's cumulative result to the current day's result
+        var previousDayCumulativeResult =
+          resultHistory.length > 0
+            ? resultHistory[resultHistory.length - 1].cumulativeResult
+            : 0;
+        var cumulativeResult = dailyResult + previousDayCumulativeResult;
+
+        // Update the result input field with the daily result
+        document.getElementById("result").value = dailyResult;
+
+        // Store results in history
+        storeResultInHistory(dailyResult, cumulativeResult);
+
+        // Display and update the chart
+        displayChart();
+      }
+
+      function storeResultInHistory(dailyResult, cumulativeResult) {
+        var currentDate = new Date().toLocaleDateString();
+        var existingRecord = resultHistory.find(
+          (entry) => entry.date === currentDate
+        );
+
+        if (existingRecord) {
+          // Update the existing record with the new results
+          existingRecord.dailyResult = dailyResult;
+          existingRecord.cumulativeResult = cumulativeResult;
+        } else {
+          // Add a new record
+          resultHistory.push({
+            date: currentDate,
+            dailyResult: dailyResult,
+            cumulativeResult: cumulativeResult,
+          });
+        }
+
+        // Display the latest cumulative record in the history container
+        displayLatestCumulativeRecord();
+      }
+
+      function displayLatestCumulativeRecord() {
+        var historyContainer = document.getElementById("historyContainer");
+        historyContainer.innerHTML = "";
+
+        resultHistory.forEach((entry) => {
+          var container = document.createElement("div");
+          container.className = "historyItem";
+          container.innerText = `${entry.date}: Daily Result: ${entry.dailyResult}, Cumulative Result: ${entry.cumulativeResult}`;
+          container.addEventListener("click", function () {
+            showDetails(entry.date);
+          });
+          historyContainer.appendChild(container);
+        });
+
+        // Save history to localStorage
+        saveHistory(resultHistory);
+      }
+
+      function displayChart() {
+        var dates = resultHistory.map((entry) => entry.date);
+        var cumulativeResults = resultHistory.map(
+          (entry) => entry.cumulativeResult
+        );
+
+        var data = [
+          {
+            x: dates,
+            y: cumulativeResults,
+            type: "scatter",
+            mode: "lines+markers",
+          },
+        ];
+
+        var layout = {
+          title: "Cumulative Result Over Time",
+          xaxis: {
+            rangeslider: {
+              // Add a rangeslider to the x-axis
+              autorange: true,
+            },
+          },
+        };
+
+        if (!chart) {
+          chart = Plotly.newPlot("chartContainer", data, layout);
+        } else {
+          Plotly.react("chartContainer", data, layout);
+        }
+      }
+
+      function showDetails(date) {
+        // You can implement functionality to display detailed information for the selected date
+        // For simplicity, an alert is used in this example
+        alert(`Details for ${date}`);
+      }
+
+      function loadHistory() {
+        // Load history from localStorage
+        var savedHistory = localStorage.getItem("resultHistory");
+
+        if (savedHistory) {
+          return JSON.parse(savedHistory);
+        } else {
+          return [];
+        }
+      }
+
+      function saveHistory(history) {
+        // Save history to localStorage
+        localStorage.setItem("resultHistory", JSON.stringify(history));
+      }
+
+      function clearHistory() {
+        // Clear the history array
+        resultHistory = [];
+
+        // Clear the history container on the page
+        var historyContainer = document.getElementById("historyContainer");
+        historyContainer.innerHTML = "";
+
+        // Clear the result input field
+        document.getElementById("result").value = "";
+
+        // Clear the chart
+        displayChart();
+
+        // Save the empty history to localStorage
+        saveHistory(resultHistory);
+      }
+
+      function exportResults() {
+        // Create a new Excel workbook
+        var wb = XLSX.utils.book_new();
+        // Convert the result history to a worksheet
+        var ws = XLSX.utils.json_to_sheet(resultHistory);
+        // Add the worksheet to the workbook
+        XLSX.utils.book_append_sheet(wb, ws, "Result History");
+        // Save the workbook as an Excel file
+        XLSX.writeFile(wb, "result_history.xlsx");
+      }
+
+      function exportChart() {
+        // Use the html2canvas and gif.js libraries to export the chart as a gif
+        var chartContainer = document.getElementById("chartContainer");
+
+        html2canvas(chartContainer).then(function (canvas) {
+          var dataURL = canvas.toDataURL("image/png");
+
+          var gif = new GIF({
+            workers: 2,
+            quality: 10,
+            workerScript:
+              "https://cdn.rawgit.com/antimatter15/jsgif/master/dist/gif.worker.js",
+          });
+
+          gif.addFrame(canvas, { delay: 200 });
+          gif.render();
+
+          gif.on("finished", function (blob) {
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "chart.gif";
+            a.click();
+          });
+        });
+      }
+    </script>
+  </body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RIVIAN</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        background-color: #f5f5f5;
+      }
+
+      header {
+        background-color: #333;
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-size: 24px;
+      }
+
+      nav {
+        width: 200px;
+        background-color: #333;
+        color: white;
+        position: fixed;
+        height: 100%;
+        overflow: auto;
+      }
+
+      ul {
+        list-style: none;
+        padding: 0;
+      }
+
+      li {
+        margin-bottom: 10px;
+      }
+
+      a {
+        text-decoration: none;
+        color: white;
+        font-size: 18px;
+      }
+
+      main {
+        margin-left: 200px;
+        padding: 20px;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+
+      input {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      #result {
+        margin-top: 20px;
+        font-weight: bold;
+      }
+
+      #historyContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+      }
+
+      .historyItem {
+        cursor: pointer;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 5px;
+        text-align: center;
+        background-color: #fff;
+      }
+
+      .historyItem:hover {
+        background-color: #e0e0e0;
+      }
+
+      #chartContainer {
+        width: 100%;
+        max-width: 600px;
+        margin-top: 20px;
+      }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+
+  <body>
+    <nav>
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#services">Services</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+
+    <main>
+      <header>RIVIAN</header>
+
+      <h2>Custom Daily Calculator</h2>
+
+      <label for="duaInput">DUA/DUT fallout:</label>
+      <input type="number" id="duaInput" placeholder="Enter value" />
+
+      <label for="eolInput">EOL fallout:</label>
+      <input type="number" id="eolInput" placeholder="Enter value" />
+
+      <label for="reworkedInput">Reworked:</label>
+      <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+      <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+      <input
+        type="number"
+        id="collegeWarehouseInput"
+        placeholder="Enter value"
+      />
+
+      <br />
+
+      <button onclick="calculateResult()">Calculate</button>
+
+      <br />
+
+      <label for="result">Result:</label>
+      <input type="text" id="result" readonly />
+
+      <div id="historyContainer"> -->
+<!-- History containers will be dynamically added here -->
+<!-- </div>
+
+      <div id="chartContainer"></div> -->
+
+<!-- Add a button to trigger the clearHistory function -->
+<!-- <button onclick="clearHistory()">Clear History</button>
+    </main>
+
+    <script>
+      var resultHistory = loadHistory(); // Load history from localStorage on page load
+      var chart;
+
+      function calculateResult() {
+        var duaValue = parseInt(document.getElementById("duaInput").value) || 0;
+        var eolValue = parseInt(document.getElementById("eolInput").value) || 0;
+        var reworkedValue =
+          parseInt(document.getElementById("reworkedInput").value) || 0;
+        var collegeWarehouseValue =
+          parseInt(document.getElementById("collegeWarehouseInput").value) || 0;
+
+        var dailyResult =
+          duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+        // Add the previous day's cumulative result to the current day's result
+        var previousDayCumulativeResult =
+          resultHistory.length > 0
+            ? resultHistory[resultHistory.length - 1].cumulativeResult
+            : 0;
+        var cumulativeResult = dailyResult + previousDayCumulativeResult;
+
+        // Update the result input field with the daily result
+        document.getElementById("result").value = dailyResult;
+
+        // Store results in history
+        storeResultInHistory(dailyResult, cumulativeResult);
+
+        // Display and update the chart
+        displayChart();
+      }
+
+      function storeResultInHistory(dailyResult, cumulativeResult) {
+        var currentDate = new Date().toLocaleDateString();
+        var existingRecord = resultHistory.find(
+          (entry) => entry.date === currentDate
+        );
+
+        if (existingRecord) {
+          // Update the existing record with the new results
+          existingRecord.dailyResult = dailyResult;
+          existingRecord.cumulativeResult = cumulativeResult;
+        } else {
+          // Add a new record
+          resultHistory.push({
+            date: currentDate,
+            dailyResult: dailyResult,
+            cumulativeResult: cumulativeResult,
+          });
+        }
+
+        // Display the latest cumulative record in the history container
+        displayLatestCumulativeRecord();
+      }
+
+      function displayLatestCumulativeRecord() {
+        var historyContainer = document.getElementById("historyContainer");
+        historyContainer.innerHTML = "";
+
+        resultHistory.forEach((entry) => {
+          var container = document.createElement("div");
+          container.className = "historyItem";
+          container.innerText = `${entry.date}: Daily Result: ${entry.dailyResult}, Cumulative Result: ${entry.cumulativeResult}`;
+          container.addEventListener("click", function () {
+            showDetails(entry.date);
+          });
+          historyContainer.appendChild(container);
+        });
+
+        // Save history to localStorage
+        saveHistory(resultHistory);
+      }
+
+      function displayChart() {
+        var dates = resultHistory.map((entry) => entry.date);
+        var cumulativeResults = resultHistory.map(
+          (entry) => entry.cumulativeResult
+        );
+
+        var data = [
+          {
+            x: dates,
+            y: cumulativeResults,
+            type: "scatter",
+            mode: "lines+markers",
+          },
+        ];
+
+        var layout = {
+          title: "Cumulative Result Over Time",
+          xaxis: {
+            rangeslider: {
+              autorange: true,
+            },
+          },
+        };
+
+        if (!chart) {
+          chart = Plotly.newPlot("chartContainer", data, layout);
+        } else {
+          Plotly.react("chartContainer", data, layout);
+        }
+      }
+
+      function showDetails(date) {
+        // You can implement functionality to display detailed information for the selected date
+        // For simplicity, an alert is used in this example
+        alert(`Details for ${date}`);
+      }
+
+      function loadHistory() {
+        // Load history from localStorage
+        var savedHistory = localStorage.getItem("resultHistory");
+
+        if (savedHistory) {
+          return JSON.parse(savedHistory);
+        } else {
+          return [];
+        }
+      }
+
+      function saveHistory(history) {
+        // Save history to localStorage
+        localStorage.setItem("resultHistory", JSON.stringify(history));
+      }
+
+      function clearHistory() {
+        // Clear the history array
+        resultHistory = [];
+
+        // Clear the history container on the page
+        var historyContainer = document.getElementById("historyContainer");
+        historyContainer.innerHTML = "";
+
+        // Clear the result input field
+        document.getElementById("result").value = "";
+
+        // Clear the chart
+        displayChart();
+
+        // Save the empty history to localStorage
+        saveHistory(resultHistory);
+      }
+    </script>
+  </body>
+</html> -->
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RIVIAN</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        background-color: #f5f5f5;
+      }
+
+      header {
+        background-color: #333;
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-size: 24px;
+      }
+
+      nav {
+        width: 200px;
+        background-color: #333;
+        color: white;
+        position: fixed;
+        height: 100%;
+        overflow: auto;
+      }
+
+      main {
+        margin-left: 200px;
+        padding: 20px;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+
+      input {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      #result {
+        margin-top: 20px;
+        font-weight: bold;
+      }
+
+      #historyContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+      }
+
+      .historyItem {
+        cursor: pointer;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 5px;
+        text-align: center;
+        background-color: #fff;
+      }
+
+      .historyItem:hover {
+        background-color: #e0e0e0;
+      }
+
+      #chartContainer {
+        width: 100%;
+        max-width: 600px;
+        margin-top: 20px;
+      }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+
+  <body>
+    <nav>
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#services">Services</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+
+    <main>
+      <header>RIVIAN</header>
+
+      <h2>Custom Daily Calculator</h2>
+
+      <label for="duaInput">DUA/DUT fallout:</label>
+      <input type="number" id="duaInput" placeholder="Enter value" />
+
+      <label for="eolInput">EOL fallout:</label>
+      <input type="number" id="eolInput" placeholder="Enter value" />
+
+      <label for="reworkedInput">Reworked:</label>
+      <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+      <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+      <input
+        type="number"
+        id="collegeWarehouseInput"
+        placeholder="Enter value"
+      />
+
+      <br />
+
+      <button onclick="calculateResult()">Calculate</button>
+
+      <br />
+
+      <label for="result">Result:</label>
+      <input type="text" id="result" readonly />
+
+      <div id="historyContainer"> -->
+<!-- History containers will be dynamically added here -->
+<!-- </div>
+
+      <div id="chartContainer"></div>
+    </main>
+
+    <script>
+      var resultHistory = loadHistory(); // Load history from localStorage on page load
+      var chart;
+
+      function calculateResult() {
+        var duaValue = parseInt(document.getElementById("duaInput").value) || 0;
+        var eolValue = parseInt(document.getElementById("eolInput").value) || 0;
+        var reworkedValue =
+          parseInt(document.getElementById("reworkedInput").value) || 0;
+        var collegeWarehouseValue =
+          parseInt(document.getElementById("collegeWarehouseInput").value) || 0;
+
+        var result =
+          duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+        document.getElementById("result").value = result;
+
+        // Store result in history
+        storeResultInHistory(result);
+
+        // Display and update the chart
+        displayChart();
+      }
+
+      function storeResultInHistory(result) {
+        var currentDate = new Date().toLocaleDateString();
+        var existingRecord = resultHistory.find(
+          (entry) => entry.date === currentDate
+        );
+
+        if (existingRecord) {
+          // Update the existing record
+          existingRecord.result = result;
+        } else {
+          // Add a new record
+          resultHistory.push({ date: currentDate, result: result });
+        }
+
+        // Display the latest cumulative record in the history container
+        displayLatestCumulativeRecord();
+      }
+
+      function displayLatestCumulativeRecord() {
+        var historyContainer = document.getElementById("historyContainer");
+        historyContainer.innerHTML = "";
+
+        resultHistory.forEach((entry) => {
+          var container = document.createElement("div");
+          container.className = "historyItem";
+          container.innerText = `${entry.date}: ${entry.result}`;
+          container.addEventListener("click", function () {
+            showDetails(entry.date);
+          });
+          historyContainer.appendChild(container);
+        });
+
+        // Save history to localStorage
+        saveHistory(resultHistory);
+      }
+
+      function displayChart() {
+        var dates = resultHistory.map((entry) => entry.date);
+        var results = resultHistory.map((entry) => entry.result);
+
+        var data = [
+          {
+            x: dates,
+            y: results,
+            type: "scatter",
+            mode: "lines+markers",
+          },
+        ];
+
+        var layout = {
+          title: "Result Over Time",
+          xaxis: {
+            rangeslider: {
+              // Add a rangeslider to the x-axis
+              autorange: true,
+            },
+          },
+        };
+
+        if (!chart) {
+          chart = Plotly.newPlot("chartContainer", data, layout);
+        } else {
+          Plotly.react("chartContainer", data, layout);
+        }
+      }
+
+      function showDetails(date) {
+        // You can implement functionality to display detailed information for the selected date
+        // For simplicity, an alert is used in this example
+        alert(`Details for ${date}`);
+      }
+
+      function loadHistory() {
+        // Load history from localStorage
+        var savedHistory = localStorage.getItem("resultHistory");
+
+        if (savedHistory) {
+          return JSON.parse(savedHistory);
+        } else {
+          return [];
+        }
+      }
+
+      function saveHistory(history) {
+        // Save history to localStorage
+        localStorage.setItem("resultHistory", JSON.stringify(history));
+      }
+    </script>
+  </body>
+</html> -->
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RIVIAN</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        background-color: #f5f5f5;
+      }
+
+      header {
+        background-color: #333;
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-size: 24px;
+      }
+
+      nav {
+        width: 200px;
+        background-color: #333;
+        color: white;
+        position: fixed;
+        height: 100%;
+        overflow: auto;
+      }
+
+      main {
+        margin-left: 200px;
+        padding: 20px;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+
+      input {
+        width: 100%;
+        padding: 8px;
+        margin: 5px 0;
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      #result {
+        margin-top: 20px;
+        font-weight: bold;
+      }
+
+      #historyContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+      }
+
+      .historyItem {
+        cursor: pointer;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 5px;
+        text-align: center;
+        background-color: #fff;
+      }
+
+      .historyItem:hover {
+        background-color: #e0e0e0;
+      }
+
+      #chartContainer {
+        width: 100%;
+        max-width: 600px;
+        margin-top: 20px;
+      }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+
+  <body>
+    <nav>
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#services">Services</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+
+    <main>
+      <header>RIVIAN</header>
+
+      <h2>Custom Daily Calculator</h2>
+
+      <label for="duaInput">DUA/DUT fallout:</label>
+      <input type="number" id="duaInput" placeholder="Enter value" />
+
+      <label for="eolInput">EOL fallout:</label>
+      <input type="number" id="eolInput" placeholder="Enter value" />
+
+      <label for="reworkedInput">Reworked:</label>
+      <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+      <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+      <input
+        type="number"
+        id="collegeWarehouseInput"
+        placeholder="Enter value"
+      />
+
+      <br />
+
+      <button onclick="calculateResult()">Calculate</button>
+
+      <br />
+
+      <label for="result">Result:</label>
+      <input type="text" id="result" readonly />
+
+      <div id="historyContainer"> -->
+<!-- History containers will be dynamically added here -->
+<!-- </div>
+
+      <div id="chartContainer"></div>
+    </main>
+
+    <script>
+      var resultHistory = [];
+      var chart;
+
+      function calculateResult() {
+        var duaValue = parseInt(document.getElementById("duaInput").value) || 0;
+        var eolValue = parseInt(document.getElementById("eolInput").value) || 0;
+        var reworkedValue =
+          parseInt(document.getElementById("reworkedInput").value) || 0;
+        var collegeWarehouseValue =
+          parseInt(document.getElementById("collegeWarehouseInput").value) || 0;
+
+        var result =
+          duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+        document.getElementById("result").value = result;
+
+        // Store result in history
+        storeResultInHistory(result);
+
+        // Display and update the chart
+        displayChart();
+      }
+
+      function storeResultInHistory(result) {
+        var currentDate = new Date().toLocaleDateString();
+        var existingRecord = resultHistory.find(
+          (entry) => entry.date === currentDate
+        );
+
+        if (existingRecord) {
+          // Update the existing record
+          existingRecord.result = result;
+        } else {
+          // Add a new record
+          resultHistory.push({ date: currentDate, result: result });
+        }
+
+        // Display the latest cumulative record in the history container
+        displayLatestCumulativeRecord();
+      }
+
+      function displayLatestCumulativeRecord() {
+        var historyContainer = document.getElementById("historyContainer");
+        historyContainer.innerHTML = "";
+
+        resultHistory.forEach((entry) => {
+          var container = document.createElement("div");
+          container.className = "historyItem";
+          container.innerText = `${entry.date}: ${entry.result}`;
+          container.addEventListener("click", function () {
+            showDetails(entry.date);
+          });
+          historyContainer.appendChild(container);
+        });
+      }
+
+      function displayChart() {
+        var dates = resultHistory.map((entry) => entry.date);
+        var results = resultHistory.map((entry) => entry.result);
+
+        var data = [
+          {
+            x: dates,
+            y: results,
+            type: "scatter",
+            mode: "lines+markers",
+          },
+        ];
+
+        var layout = {
+          title: "Result Over Time",
+          xaxis: {
+            rangeslider: {
+              // Add a rangeslider to the x-axis
+              autorange: true,
+            },
+          },
+        };
+
+        if (!chart) {
+          chart = Plotly.newPlot("chartContainer", data, layout);
+        } else {
+          Plotly.react("chartContainer", data, layout);
+        }
+      }
+
+      function showDetails(date) {
+        // You can implement functionality to display detailed information for the selected date
+        // For simplicity, an alert is used in this example
+        alert(`Details for ${date}`);
+      }
+    </script>
+  </body>
+</html> -->
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Daily Calculator</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        text-align: center;
+        background-color: #a52c2c; /* Light gray background color */
+      }
+
+      header {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px;
+        font-size: 24px;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+
+      input {
+        width: 200px;
+        padding: 8px;
+        margin: 5px;
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      #result {
+        margin-top: 20px;
+        font-weight: bold;
+      }
+
+      #historyContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+      }
+
+      .historyItem {
+        cursor: pointer;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 5px;
+        width: 200px;
+        text-align: center;
+      }
+
+      .historyItem:hover {
+        background-color: #e0e0e0; /* Lighter gray background color on hover */
+      }
+
+      #chartContainer {
+        width: 80%;
+        max-width: 600px;
+        margin-top: 20px;
+      }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+  <body>
+    <header>Enduro Ascent Rework Buffer</header>
+
+    <h2>Custom Daily Calculator</h2>
+
+    <label for="duaInput">DUA/DUT fallout:</label>
+    <input type="number" id="duaInput" placeholder="Enter value" />
+
+    <label for="eolInput">EOL fallout:</label>
+    <input type="number" id="eolInput" placeholder="Enter value" />
+
+    <label for="reworkedInput">Reworked:</label>
+    <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+    <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+    <input type="number" id="collegeWarehouseInput" placeholder="Enter value" />
+
+    <br />
+
+    <button onclick="calculateResult()">Calculate</button>
+
+    <br />
+
+    <label for="result">Result:</label>
+    <input type="text" id="result" readonly />
+
+    <div id="historyContainer"> -->
+<!-- History containers will be dynamically added here -->
+<!-- </div>
+
+    <div id="chartContainer"></div>
+
+    <script>
+      var resultHistory = [];
+      var chart;
+
+      function calculateResult() {
+        var duaValue = parseInt(document.getElementById("duaInput").value) || 0;
+        var eolValue = parseInt(document.getElementById("eolInput").value) || 0;
+        var reworkedValue =
+          parseInt(document.getElementById("reworkedInput").value) || 0;
+        var collegeWarehouseValue =
+          parseInt(document.getElementById("collegeWarehouseInput").value) || 0;
+
+        var result =
+          duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+        document.getElementById("result").value = result;
+
+        // Store result in history
+        storeResultInHistory(result);
+
+        // Display and update the chart
+        displayChart();
+      }
+
+      function storeResultInHistory(result) {
+        var currentDate = new Date().toLocaleDateString();
+        var existingRecord = resultHistory.find(
+          (entry) => entry.date === currentDate
+        );
+
+        if (existingRecord) {
+          // Update the existing record
+          existingRecord.result = result;
+        } else {
+          // Add a new record
+          resultHistory.push({ date: currentDate, result: result });
+        }
+
+        // Display the latest cumulative record in the history container
+        displayLatestCumulativeRecord();
+      }
+
+      function displayLatestCumulativeRecord() {
+        var historyContainer = document.getElementById("historyContainer");
+        historyContainer.innerHTML = "";
+
+        resultHistory.forEach((entry) => {
+          var container = document.createElement("div");
+          container.className = "historyItem";
+          container.innerText = `${entry.date}: ${entry.result}`;
+          container.addEventListener("click", function () {
+            showDetails(entry.date);
+          });
+          historyContainer.appendChild(container);
+        });
+      }
+
+      function displayChart() {
+        var dates = resultHistory.map((entry) => entry.date);
+        var results = resultHistory.map((entry) => entry.result);
+
+        var data = [
+          {
+            x: dates,
+            y: results,
+            type: "scatter",
+            mode: "lines+markers",
+          },
+        ];
+
+        var layout = {
+          title: "Result Over Time",
+          xaxis: {
+            rangeslider: {
+              // Add a rangeslider to the x-axis
+              autorange: true,
+            },
+          },
+        };
+
+        if (!chart) {
+          chart = Plotly.newPlot("chartContainer", data, layout);
+        } else {
+          Plotly.react("chartContainer", data, layout);
+        }
+      }
+
+      function showDetails(date) {
+        // You can implement functionality to display detailed information for the selected date
+        // For simplicity, an alert is used in this example
+        alert(`Details for ${date}`);
+      }
+    </script>
+  </body>
+</html> -->
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Daily Calculator</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        text-align: center;
+      }
+
+      header {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px;
+        font-size: 24px;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+
+      input {
+        width: 200px;
+        padding: 8px;
+        margin: 5px;
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      #result {
+        margin-top: 20px;
+        font-weight: bold;
+      }
+
+      #historyContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+      }
+
+      .historyItem {
+        cursor: pointer;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 5px;
+        width: 200px;
+        text-align: center;
+      }
+
+      .historyItem:hover {
+        background-color: #f0f0f0;
+      }
+
+      #chartContainer {
+        width: 80%;
+        max-width: 600px;
+        margin-top: 20px;
+      }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+  <body>
+    <header>Enduro Ascent Rework Buffer</header>
+
+    <h2>Custom Daily Calculator</h2>
+
+    <label for="duaInput">DUA/DUT fallout:</label>
+    <input type="number" id="duaInput" placeholder="Enter value" />
+
+    <label for="eolInput">EOL fallout:</label>
+    <input type="number" id="eolInput" placeholder="Enter value" />
+
+    <label for="reworkedInput">Reworked:</label>
+    <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+    <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+    <input type="number" id="collegeWarehouseInput" placeholder="Enter value" />
+
+    <br />
+
+    <button onclick="calculateResult()">Calculate</button>
+
+    <br />
+
+    <label for="result">Result:</label>
+    <input type="text" id="result" readonly />
+
+    <div id="historyContainer"> -->
+<!-- History containers will be dynamically added here -->
+<!-- </div>
+
+    <div id="chartContainer"></div>
+
+    <script>
+      var resultHistory = [];
+      var chart;
+
+      function calculateResult() {
+        var duaValue = parseInt(document.getElementById("duaInput").value) || 0;
+        var eolValue = parseInt(document.getElementById("eolInput").value) || 0;
+        var reworkedValue =
+          parseInt(document.getElementById("reworkedInput").value) || 0;
+        var collegeWarehouseValue =
+          parseInt(document.getElementById("collegeWarehouseInput").value) || 0;
+
+        var result =
+          duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+        document.getElementById("result").value = result;
+
+        // Store result in history
+        storeResultInHistory(result);
+
+        // Display and update the chart
+        displayChart();
+      }
+
+      function storeResultInHistory(result) {
+        var currentDate = new Date().toLocaleDateString();
+        var existingRecord = resultHistory.find(
+          (entry) => entry.date === currentDate
+        );
+
+        if (existingRecord) {
+          // Update the existing record
+          existingRecord.result = result;
+        } else {
+          // Add a new record
+          resultHistory.push({ date: currentDate, result: result });
+        }
+
+        // Display the latest cumulative record in the history container
+        displayLatestCumulativeRecord();
+      }
+
+      function displayLatestCumulativeRecord() {
+        var historyContainer = document.getElementById("historyContainer");
+        historyContainer.innerHTML = "";
+
+        resultHistory.forEach((entry) => {
+          var container = document.createElement("div");
+          container.className = "historyItem";
+          container.innerText = `${entry.date}: ${entry.result}`;
+          container.addEventListener("click", function () {
+            showDetails(entry.date);
+          });
+          historyContainer.appendChild(container);
+        });
+      }
+
+      function displayChart() {
+        var dates = resultHistory.map((entry) => entry.date);
+        var results = resultHistory.map((entry) => entry.result);
+
+        var data = [
+          {
+            x: dates,
+            y: results,
+            type: "scatter",
+            mode: "lines+markers",
+          },
+        ];
+
+        var layout = {
+          title: "Result Over Time",
+          xaxis: {
+            rangeslider: {
+              // Add a rangeslider to the x-axis
+              autorange: true,
+            },
+          },
+        };
+
+        if (!chart) {
+          chart = Plotly.newPlot("chartContainer", data, layout);
+        } else {
+          Plotly.react("chartContainer", data, layout);
+        }
+      }
+
+      function showDetails(date) {
+        // You can implement functionality to display detailed information for the selected date
+        // For simplicity, an alert is used in this example
+        alert(`Details for ${date}`);
+      }
+    </script>
+  </body>
+</html> -->
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Daily Calculator</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        text-align: center;
+      }
+
+      header {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px;
+        font-size: 24px;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+
+      input {
+        width: 200px;
+        padding: 8px;
+        margin: 5px;
+        box-sizing: border-box;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      #result {
+        margin-top: 20px;
+        font-weight: bold;
+      }
+
+      #historyContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+      }
+
+      #chartContainer {
+        width: 80%;
+        max-width: 600px;
+        margin-top: 20px;
+      }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+  <body>
+    <header>Enduro Ascent Rework Buffer</header>
+
+    <h2>Custom Daily Calculator</h2>
+
+    <label for="duaInput">DUA/DUT fallout:</label>
+    <input type="number" id="duaInput" placeholder="Enter value" />
+
+    <label for="eolInput">EOL fallout:</label>
+    <input type="number" id="eolInput" placeholder="Enter value" />
+
+    <label for="reworkedInput">Reworked:</label>
+    <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+    <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+    <input type="number" id="collegeWarehouseInput" placeholder="Enter value" />
+
+    <br />
+
+    <button onclick="calculateResult()">Calculate</button>
+
+    <br />
+
+    <label for="result">Result:</label>
+    <input type="text" id="result" readonly />
+
+    <div id="historyContainer"> -->
+<!-- History containers will be dynamically added here -->
+<!-- </div>
+
+    <div id="chartContainer"></div>
+
+    <script>
+      var resultHistory = [];
+
+      function calculateResult() {
+        var duaValue = parseInt(document.getElementById("duaInput").value) || 0;
+        var eolValue = parseInt(document.getElementById("eolInput").value) || 0;
+        var reworkedValue =
+          parseInt(document.getElementById("reworkedInput").value) || 0;
+        var collegeWarehouseValue =
+          parseInt(document.getElementById("collegeWarehouseInput").value) || 0;
+
+        var result =
+          duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+        document.getElementById("result").value = result;
+
+        // Store result in history
+        storeResultInHistory(result);
+
+        // Display and update the chart
+        displayChart();
+      }
+
+      function storeResultInHistory(result) {
+        var currentDate = new Date().toLocaleDateString();
+        resultHistory.push({ date: currentDate, result: result });
+      }
+
+      function displayChart() {
+        var dates = resultHistory.map((entry) => entry.date);
+        var results = resultHistory.map((entry) => entry.result);
+
+        var data = [
+          {
+            x: dates,
+            y: results,
+            type: "scatter",
+            mode: "lines+markers",
+          },
+        ];
+
+        var layout = {
+          title: "Result Over Time",
+          xaxis: {
+            rangeslider: {
+              // Add a rangeslider to the x-axis
+              autorange: true,
+            },
+          },
+        };
+
+        Plotly.newPlot("chartContainer", data, layout);
+      }
+    </script>
+  </body>
+</html> -->
+
+<!-- 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Custom Daily Calculator</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+
+    header {
+      background-color: #4caf50;
+      color: white;
+      padding: 10px;
+      font-size: 24px;
+    }
+
+    h2 {
+      color: #333;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+
+    input {
+      width: 200px;
+      padding: 8px;
+      margin: 5px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #4caf50;
+      color: white;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    #result {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    #historyContainer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 20px;
+    }
+
+    .historyItem {
+      cursor: pointer;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin: 5px;
+      width: 200px;
+      text-align: center;
+    }
+
+    .historyItem:hover {
+      background-color: #f0f0f0;
+    }
+
+    #chartContainer {
+      width: 80%;
+      max-width: 600px;
+      margin-top: 20px;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>Enduro Ascent Rework Buffer</header>
+
+  <h2>Custom Daily Calculator</h2>
+
+  <label for="duaInput">DUA/DUT fallout:</label>
+  <input type="number" id="duaInput" placeholder="Enter value" />
+
+  <label for="eolInput">EOL fallout:</label>
+  <input type="number" id="eolInput" placeholder="Enter value" />
+
+  <label for="reworkedInput">Reworked:</label>
+  <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+  <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+  <input type="number" id="collegeWarehouseInput" placeholder="Enter value" />
+
+  <br />
+
+  <button onclick="calculateResult()">Calculate</button>
+
+  <br />
+
+  <label for="result">Result:</label>
+  <input type="text" id="result" readonly />
+
+  <div id="historyContainer"> -->
+<!-- History containers will be dynamically added here -->
+<!-- </div>
+
+  <div id="chartContainer">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <script>
+    var resultHistory = [];
+    var chart;
+
+    function calculateResult() {
+      var duaValue = parseInt(document.getElementById('duaInput').value) || 0;
+      var eolValue = parseInt(document.getElementById('eolInput').value) || 0;
+      var reworkedValue = parseInt(document.getElementById('reworkedInput').value) || 0;
+      var collegeWarehouseValue = parseInt(document.getElementById('collegeWarehouseInput').value) || 0;
+
+      var result = duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+      document.getElementById('result').value = result;
+
+      // Store result in history
+      storeResultInHistory(result);
+
+      // Display and update the miniplot
+      displayMiniplot();
+    }
+
+    function storeResultInHistory(result) {
+      var currentDate = new Date().toLocaleDateString();
+      resultHistory.push({ date: currentDate, result: result });
+    }
+
+    function displayMiniplot() {
+      var canvas = document.getElementById('chart');
+      if (!chart) {
+        chart = new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: resultHistory.map(entry => entry.date),
+            datasets: [{
+              label: 'Result',
+              data: resultHistory.map(entry => entry.result),
+              borderColor: '#4CAF50',
+              borderWidth: 2,
+              fill: false
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                type: 'category'
+              }
+            }
+          }
+        });
+      } else {
+        // Update the existing chart
+        chart.data.labels = resultHistory.map(entry => entry.date);
+        chart.data.datasets[0].data = resultHistory.map(entry => entry.result);
+        chart.update();
+      }
+    }
+  </script>
+</body>
+</html> -->
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Calculator</title>
+  </head>
+  <body>
+    <h2>Custom Calculator</h2>
+
+    <label for="duaInput">DUA/DUT fallout:</label>
+    <input type="number" id="duaInput" placeholder="Enter value" />
+
+    <br />
+
+    <label for="eolInput">EOL fallout:</label>
+    <input type="number" id="eolInput" placeholder="Enter value" />
+
+    <br />
+
+    <label for="reworkedInput">Reworked:</label>
+    <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+    <br />
+
+    <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+    <input type="number" id="collegeWarehouseInput" placeholder="Enter value" />
+
+    <br />
+
+    <button onclick="calculateResult()">Calculate</button>
+
+    <br />
+
+    <label for="result">Result:</label>
+    <input type="text" id="result" readonly />
+
+    <script>
+      function calculateResult() {
+        // Get input values
+        var duaValue = parseInt(document.getElementById("duaInput").value) || 0;
+        var eolValue = parseInt(document.getElementById("eolInput").value) || 0;
+        var reworkedValue =
+          parseInt(document.getElementById("reworkedInput").value) || 0;
+        var collegeWarehouseValue =
+          parseInt(document.getElementById("collegeWarehouseInput").value) || 0;
+
+        // Perform calculation
+        var result =
+          duaValue + eolValue + collegeWarehouseValue - reworkedValue;
+
+        // Display result
+        document.getElementById("result").value = result;
+      }
+    </script>
+  </body>
+</html> -->
