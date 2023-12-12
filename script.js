@@ -119,7 +119,7 @@ function displayChart() {
   ];
 
   var layout = {
-    title: "Cumulative Result Over Time",
+    title: "Cumulative Rework Buffer Over Time",
     xaxis: {
       rangeslider: {
         autorange: true,
