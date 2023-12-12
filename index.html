@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RIVIAN</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <nav>
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#services">Services</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+
+    <main>
+      <header>RIVIAN</header>
+
+      <h2>Custom Daily Calculator</h2>
+
+      <label for="datePicker">Select Date:</label>
+      <input type="date" id="datePicker" />
+
+      <label for="duaInput">DUA/DUT fallout:</label>
+      <input type="number" id="duaInput" placeholder="Enter value" />
+
+      <label for="eolInput">EOL fallout:</label>
+      <input type="number" id="eolInput" placeholder="Enter value" />
+
+      <label for="reworkedInput">Reworked:</label>
+      <input type="number" id="reworkedInput" placeholder="Enter value" />
+
+      <label for="collegeWarehouseInput">College Warehouse fallout:</label>
+      <input
+        type="number"
+        id="collegeWarehouseInput"
+        placeholder="Enter value"
+      />
+
+      <br />
+
+      <button onclick="calculateResult()">Calculate</button>
+
+      <br />
+
+      <label for="result">Result:</label>
+      <input type="text" id="result" readonly />
+
+      <label for="cumulativeResult">Cumulative Result:</label>
+      <input type="text" id="cumulativeResult" readonly />
+
+      <div id="historyContainer">
+        <!-- History containers will be dynamically added here -->
+      </div>
+
+      <div id="chartContainer"></div>
+
+      <!-- Add buttons to trigger export functions -->
+      <button onclick="exportResults()">Export Results</button>
+      <button onclick="exportChart()">Export Chart</button>
+      <!-- Add a button to trigger the clearHistory function -->
+      <button onclick="clearHistory()">Clear History</button>
+    </main>
+
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.js"></script>
+    <script src="https://cdn.rawgit.com/antimatter15/jsgif/master/dist/gif.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
